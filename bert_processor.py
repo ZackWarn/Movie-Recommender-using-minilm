@@ -337,7 +337,7 @@ class MovieBERTProcessor:
 
         embeddings = data["embeddings"]
 
-        # Store embeddings filepath and metadata only, defer actual embedding array loading
+        # Store embeddings filepath and metadata
         self._embeddings_file = candidate_path
         self._embeddings_shape = embeddings.shape
         self._embeddings_dtype = embeddings.dtype
@@ -347,8 +347,15 @@ class MovieBERTProcessor:
         if self.pca is not None:
             logger.info(f"Loaded PCA transformer: {self.pca.n_components_}D reduction")
 
-        # Store only the movie data, not embeddings
-        self.movie_embeddings = None
+        # For cloud deployments, keep embeddings in memory instead of reloading from file
+        # This avoids FileNotFoundError when local file doesn't exist
+        if not os.path.exists(candidate_path):
+            # Cloud deployment: store embeddings in memory
+            logger.info("Cloud deployment detected: storing embeddings in memory")
+            self.movie_embeddings = embeddings.astype(np.float32) if embeddings.dtype != np.float32 else embeddings
+        else:
+            # Local deployment: defer loading to save memory
+            self.movie_embeddings = None
         self.movies_data = data["movies_data"].copy()
 
         # Normalize titles (e.g., "Dark Knight, The" -> "The Dark Knight")
