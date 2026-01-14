@@ -87,22 +87,23 @@ class MovieBERTProcessor:
 
         # Try external embeddings first if configured
         if Config.HF_SPACE_ENDPOINT:
-            try:
-                logger.info(
-                    "External encode start",
-                    extra={
-                        "endpoint": Config.HF_SPACE_ENDPOINT,
-                        "count": len(texts),
-                    },
-                )
-                return self._encode_external(texts)
-            except Exception as e:
-                logger.warning(
-                    f"External encoding failed: {e}, falling back to local model"
-                )
+            logger.info(
+                "External encode start",
+                extra={
+                    "endpoint": Config.HF_SPACE_ENDPOINT,
+                    "count": len(texts),
+                },
+            )
+            return self._encode_external(texts)
 
-        # Fallback to local model
-        logger.info("Using local BERT model for encoding")
+        # If PCA exists, we must match its expected dimensionality; do not fallback
+        if self.pca is not None:
+            raise RuntimeError(
+                "HF_SPACE_ENDPOINT is not set but embeddings were PCA-reduced; cannot encode locally."
+            )
+
+        # Fallback to local model only when no PCA (i.e., no reduced embeddings on disk)
+        logger.info("Using local BERT model for encoding (no PCA present)")
         return self._encode_local(texts)
 
     def _encode_external(self, texts: List[str]):
