@@ -45,14 +45,14 @@ class MovieRecommendationEngine:
         logger.info("Computing semantic similarity scores")
         similarities = cosine_similarity(query_embedding, embeddings)[0]
 
-        # Get top K indices
-        top_indices = similarities.argsort()[::-1][:top_k]
+        # Get top K+1 indices (to account for potentially excluding movies)
+        top_indices = similarities.argsort()[::-1][: top_k + 1]
 
         # Build recommendations
         recommendations = []
         for idx in top_indices:
             movie = self.movies.iloc[idx]
-            logger.debug(
+            logger.info(
                 "rank=%s title=%s score=%.4f",
                 len(recommendations) + 1,
                 movie["clean_title"],
@@ -67,6 +67,8 @@ class MovieRecommendationEngine:
                     "avg_rating": movie.get("avg_rating", 0),
                 }
             )
+            if len(recommendations) >= top_k:
+                break
 
         logger.info(
             f"Semantic ranking complete: returned {len(recommendations)} movies"
@@ -140,7 +142,7 @@ class MovieRecommendationEngine:
                 continue  # Skip the input movie itself
 
             similar_movie = self.movies.iloc[idx]
-            logger.debug(
+            logger.info(
                 "rank=%s similar_to=%s candidate=%s score=%.4f",
                 len(recommendations) + 1,
                 movie["clean_title"],
