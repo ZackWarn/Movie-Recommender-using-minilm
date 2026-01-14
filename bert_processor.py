@@ -70,30 +70,40 @@ class MovieBERTProcessor:
 
     @property
     def model(self) -> SentenceTransformer:
-        """Local model disabled when using external embeddings."""
-        raise RuntimeError("Local BERT model is disabled; using external embeddings")
+        """Get or load the local BERT model."""
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+
+            logger.info(f"Loading local BERT model: {self.model_name}")
+            self._model = SentenceTransformer(self.model_name)
+        return self._model
 
     def encode(self, texts: List[str], force_semantic=False):
         """
-        Encode texts using external HF Space embeddings. No local or keyword fallback.
-        Raises if HF_SPACE_ENDPOINT is missing or if external embedding fails.
+        Encode texts using external HF Space embeddings or local model as fallback.
         """
         if not isinstance(texts, list):
             texts = [texts]
 
-        if not Config.HF_SPACE_ENDPOINT:
-            raise RuntimeError(
-                "HF_SPACE_ENDPOINT is not set; external embeddings unavailable"
-            )
+        # Try external embeddings first if configured
+        if Config.HF_SPACE_ENDPOINT:
+            try:
+                logger.info(
+                    "External encode start",
+                    extra={
+                        "endpoint": Config.HF_SPACE_ENDPOINT,
+                        "count": len(texts),
+                    },
+                )
+                return self._encode_external(texts)
+            except Exception as e:
+                logger.warning(
+                    f"External encoding failed: {e}, falling back to local model"
+                )
 
-        logger.info(
-            "External encode start",
-            extra={
-                "endpoint": Config.HF_SPACE_ENDPOINT,
-                "count": len(texts),
-            },
-        )
-        return self._encode_external(texts)
+        # Fallback to local model
+        logger.info("Using local BERT model for encoding")
+        return self._encode_local(texts)
 
     def _encode_external(self, texts: List[str]):
         """
@@ -173,6 +183,34 @@ class MovieBERTProcessor:
 
         # Fallback: return zeros to trigger keyword-only matching (no local model)
         raise RuntimeError("External embeddings failed after retries")
+
+    def _encode_local(self, texts: List[str]):
+        """
+        Encode texts using local BERT model.
+        """
+        # Load model if not already loaded
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+
+            logger.info(f"Loading local BERT model: {self.model_name}")
+            self._model = SentenceTransformer(self.model_name)
+
+        # Encode texts
+        embeddings = self._model.encode(
+            texts, convert_to_numpy=True, show_progress_bar=False
+        )
+        embeddings = np.array(embeddings, dtype=np.float32)
+
+        # Apply PCA if available
+        if self.pca is not None:
+            embeddings = self.pca.transform(embeddings)
+            logger.info(
+                f"Local encoding complete: {len(texts)} texts reduced to {embeddings.shape[1]}D"
+            )
+        else:
+            logger.info(f"Local encoding complete: {len(texts)} texts")
+
+        return embeddings
 
     def prepare_movie_texts(self, movies_df):
         """Combine movie information into text descriptions"""
@@ -290,9 +328,7 @@ class MovieBERTProcessor:
                 normalize_title
             )
         if "title" in self.movies_data.columns:
-            self.movies_data["title"] = self.movies_data["title"].apply(
-                normalize_title
-            )
+            self.movies_data["title"] = self.movies_data["title"].apply(normalize_title)
 
         # Downcast numeric columns to save metadata memory
         for col in self.movies_data.columns:

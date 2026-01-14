@@ -32,7 +32,7 @@ class MovieRecommendationEngine:
         Pure semantic similarity-based recommendations using HF Space embeddings.
         """
         logger.info(f"Getting semantic recommendations for query: {query}")
-        
+
         # Encode query using HF Space
         query_embedding = self.bert_processor.encode([query], force_semantic=True)[0]
         query_embedding = np.array(query_embedding, dtype=np.float32).reshape(1, -1)
@@ -52,16 +52,25 @@ class MovieRecommendationEngine:
         recommendations = []
         for idx in top_indices:
             movie = self.movies.iloc[idx]
-            recommendations.append({
-                "movieId": movie["movieId"],
-                "title": movie["clean_title"],
-                "year": movie.get("year", "Unknown"),
-                "genres": movie.get("genres_list", []),
-                "avg_rating": movie.get("avg_rating", 0),
-                "score": float(similarities[idx]),
-            })
+            logger.debug(
+                "rank=%s title=%s score=%.4f",
+                len(recommendations) + 1,
+                movie["clean_title"],
+                float(similarities[idx]),
+            )
+            recommendations.append(
+                {
+                    "movieId": movie["movieId"],
+                    "title": movie["clean_title"],
+                    "year": movie.get("year", "Unknown"),
+                    "genres": movie.get("genres_list", []),
+                    "avg_rating": movie.get("avg_rating", 0),
+                }
+            )
 
-        logger.info(f"Semantic ranking complete: returned {len(recommendations)} movies")
+        logger.info(
+            f"Semantic ranking complete: returned {len(recommendations)} movies"
+        )
         return recommendations
 
     def search_movies(self, search_term, top_k=20):
@@ -84,6 +93,75 @@ class MovieRecommendationEngine:
                 }
             )
         return results
+
+    def recommend_similar_movies(self, movie_id, top_k=8):
+        """
+        Find movies similar to the given movie_id using cosine similarity.
+
+        Args:
+            movie_id: The ID of the movie to find similar movies for
+            top_k: Number of recommendations to return (default 8)
+
+        Returns:
+            List of similar movie recommendations with scores
+        """
+        logger.info(f"Finding movies similar to movie_id: {movie_id}")
+
+        # Find the movie in the dataset
+        movie_matches = self.movies[self.movies["movieId"] == int(movie_id)]
+        if movie_matches.empty:
+            logger.warning(f"Movie ID {movie_id} not found")
+            return []
+
+        movie_idx = movie_matches.index[0]
+        movie = movie_matches.iloc[0]
+        logger.info(
+            f"Found movie: {movie['clean_title']} ({movie.get('year', 'Unknown')})"
+        )
+
+        # Get all movie embeddings
+        embeddings = self.bert_processor._get_embeddings()
+        embeddings = np.array(embeddings, dtype=np.float32)
+
+        # Get the embedding for the target movie
+        movie_embedding = embeddings[movie_idx].reshape(1, -1)
+
+        # Compute cosine similarity with all movies
+        logger.info("Computing similarity scores")
+        similarities = cosine_similarity(movie_embedding, embeddings)[0]
+
+        # Get top K+1 indices (excluding the movie itself)
+        top_indices = similarities.argsort()[::-1][: top_k + 1]
+
+        # Build recommendations, excluding the input movie
+        recommendations = []
+        for idx in top_indices:
+            if idx == movie_idx:
+                continue  # Skip the input movie itself
+
+            similar_movie = self.movies.iloc[idx]
+            logger.debug(
+                "rank=%s similar_to=%s candidate=%s score=%.4f",
+                len(recommendations) + 1,
+                movie["clean_title"],
+                similar_movie["clean_title"],
+                float(similarities[idx]),
+            )
+            recommendations.append(
+                {
+                    "movieId": similar_movie["movieId"],
+                    "title": similar_movie["clean_title"],
+                    "year": similar_movie.get("year", "Unknown"),
+                    "genres": similar_movie.get("genres_list", []),
+                        "avg_rating": similar_movie.get("avg_rating", 0),
+                }
+            )
+
+            if len(recommendations) >= top_k:
+                break
+
+        logger.info(f"Found {len(recommendations)} similar movies")
+        return recommendations
 
     def _enhance_with_imdb_data(self, recommendations):
         """Enhance recommendations with IMDB data if available"""
