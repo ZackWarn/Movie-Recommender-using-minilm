@@ -311,13 +311,15 @@ class MovieBERTProcessor:
                 # Download from your HF Hub space/model
                 # Format: repo_id="username/repo-name", filename="movie_embeddings.pkl"
                 hf_repo = os.getenv("HF_EMBEDDINGS_REPO", "VibinJethro/cinematch-embeddings")
+                hf_token = os.getenv("HF_API_TOKEN")
                 
                 logger.info(f"Downloading from {hf_repo}...")
                 hub_path = hf_hub_download(
                     repo_id=hf_repo,
                     filename="movie_embeddings.pkl",
                     repo_type="dataset",
-                    cache_dir=".cache"
+                    cache_dir=".cache",
+                    token=hf_token
                 )
                 logger.info(f"Downloaded embeddings from HF Hub: {hub_path}")
                 
