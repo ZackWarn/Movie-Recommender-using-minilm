@@ -285,27 +285,53 @@ class MovieBERTProcessor:
         print(f"Embeddings saved to {resolved_path}")
 
     def load_embeddings(self, filepath="movie_embeddings.pkl"):
-        """Load pre-computed embeddings with sparse on-demand loading"""
+        """Load pre-computed embeddings from local file or cloud (HF Hub)"""
         # Skip if already loaded
         if self.movies_data is not None:
             return
 
+        # Try local file first
         candidate_path = (
             filepath
             if os.path.isabs(filepath)
             else os.path.join(os.path.dirname(os.path.abspath(__file__)), filepath)
         )
-        if not os.path.exists(candidate_path):
-            alt_path = os.path.abspath(filepath)
-            if os.path.exists(alt_path):
-                candidate_path = alt_path
-            else:
+        
+        data = None
+        if os.path.exists(candidate_path):
+            logger.info(f"Loading embeddings from local file: {candidate_path}")
+            with open(candidate_path, "rb") as f:
+                data = pickle.load(f)
+        else:
+            # Try to download from HF Hub (for cloud deployments)
+            try:
+                from huggingface_hub import hf_hub_download
+                logger.info("Local embeddings not found, attempting to download from HF Hub...")
+                
+                # Download from your HF Hub space/model
+                # Format: repo_id="username/repo-name", filename="movie_embeddings.pkl"
+                hf_repo = os.getenv("HF_EMBEDDINGS_REPO", "VibinJethro/cinematch-embeddings")
+                
+                logger.info(f"Downloading from {hf_repo}...")
+                hub_path = hf_hub_download(
+                    repo_id=hf_repo,
+                    filename="movie_embeddings.pkl",
+                    repo_type="dataset",
+                    cache_dir=".cache"
+                )
+                logger.info(f"Downloaded embeddings from HF Hub: {hub_path}")
+                
+                with open(hub_path, "rb") as f:
+                    data = pickle.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load embeddings from HF Hub: {e}")
                 raise FileNotFoundError(
-                    f"Embeddings file not found at '{filepath}' or '{candidate_path}'"
+                    f"Embeddings not found locally or on HF Hub. "
+                    f"Set HF_EMBEDDINGS_REPO env var or ensure local file exists."
                 )
 
-        with open(candidate_path, "rb") as f:
-            data = pickle.load(f)
+        if data is None:
+            raise RuntimeError("Failed to load embeddings data")
 
         embeddings = data["embeddings"]
 
