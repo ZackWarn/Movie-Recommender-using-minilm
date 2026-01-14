@@ -45,13 +45,27 @@ class MovieRecommendationEngine:
         logger.info("Computing semantic similarity scores")
         similarities = cosine_similarity(query_embedding, embeddings)[0]
 
-        # Get top K+1 indices (to account for potentially excluding movies)
-        top_indices = similarities.argsort()[::-1][: top_k + 1]
+        # Get top K+5 indices (to account for potentially excluding the input movie)
+        top_indices = similarities.argsort()[::-1][: top_k + 5]
 
-        # Build recommendations
+        # Normalize query for comparison (case-insensitive)
+        query_normalized = query.lower().strip()
+
+        # Build recommendations, excluding movies that match the query
         recommendations = []
         for idx in top_indices:
             movie = self.movies.iloc[idx]
+            movie_title = movie["clean_title"].lower().strip()
+            
+            # Skip if the movie title matches the query
+            if movie_title == query_normalized or query_normalized in movie_title:
+                logger.info(
+                    "Skipping input movie: %s (matched query: %s)",
+                    movie["clean_title"],
+                    query
+                )
+                continue
+            
             logger.info(
                 "rank=%s title=%s score=%.4f",
                 len(recommendations) + 1,
@@ -155,7 +169,7 @@ class MovieRecommendationEngine:
                     "title": similar_movie["clean_title"],
                     "year": similar_movie.get("year", "Unknown"),
                     "genres": similar_movie.get("genres_list", []),
-                        "avg_rating": similar_movie.get("avg_rating", 0),
+                    "avg_rating": similar_movie.get("avg_rating", 0),
                 }
             )
 
