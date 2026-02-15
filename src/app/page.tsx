@@ -49,13 +49,12 @@ interface MovieType {
 
 export default function CineMatchHero() {
   const [search, setSearch] = useState("");
-  const [lastSearchQuery, setLastSearchQuery] = useState(""); // Store the actual query used
+  const [lastSearchQuery, setLastSearchQuery] = useState("");
   const [recommendations, setRecommendations] = useState<MovieType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [hasSearched, setHasSearched] = useState(false); // Track if user has searched
-  const MIN_SKELETON_MS = 2000; // ensure skeleton shows for at least 2s
-  // IMDb posters removed per request
+  const [hasSearched, setHasSearched] = useState(false);
+  const MIN_SKELETON_MS = 2000;
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,19 +62,20 @@ export default function CineMatchHero() {
 
     setLoading(true);
     setError("");
-    setHasSearched(true); // Mark that user has searched
-    setRecommendations([]); // Clear prior results to avoid showing old cards during new search
+    setHasSearched(true);
+    setRecommendations([]);
     const queryToUse = search.trim();
     const start = performance.now();
     
     try {
-      const response = await fetch('/api/recommendations/query', {
+      // Call similar movies endpoint instead of semantic query
+      const response = await fetch('/api/recommendations/similar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          query: queryToUse,
+          movie_id: queryToUse,
           top_k: 8
         }),
       });
@@ -110,8 +110,8 @@ export default function CineMatchHero() {
           KnowMovies
         </h1>
         <p className="text-purple-100 text-lg text-center mb-7">
-          Discover your next favorite movie. Enter a film you love, and we&apos;ll find
-          <br />similar gems you&apos;ll enjoy.
+          Find movies similar to your favorites. Enter any movie title and discover
+          <br />hidden gems you&apos;ll love.
         </p>
         <div className="w-full flex justify-center mb-10">
           <form
@@ -124,7 +124,7 @@ export default function CineMatchHero() {
             <input
               type="text"
               className="flex-grow py-3 pl-12 pr-20 bg-transparent placeholder-purple-200 outline-none text-amber-100 rounded-xl"
-              placeholder="Enter a movie to get recommendations"
+              placeholder="Enter a movie title (e.g., Fight Club, Inception)"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -150,10 +150,10 @@ export default function CineMatchHero() {
           <div className="flex flex-col items-center mt-8 mb-2">
             <span className="text-purple-200 text-6xl mb-4">🎬</span>
             <h2 className="text-white text-2xl font-bold mb-2 text-center">
-              Ready to discover amazing movies?
+              Find Movies You'll Love
             </h2>
             <p className="text-purple-200 text-center mb-3">
-              Search for a movie above to get personalized recommendations
+              Enter a movie title above to discover similar recommendations
             </p>
           </div>
         )}

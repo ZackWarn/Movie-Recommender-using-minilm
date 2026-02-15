@@ -44,8 +44,20 @@ next-env.d.ts
 venv/
 venv_test/
 __pycache__/
-# Keep movie_embeddings.pkl for deployment
-# *.pkl
+*.pkl
+*.pickle
+*.h5
+*.npy
 *.csv
 movies_dataset/
+movies_dataset_backup/
+.cache/
+
+# Utility/test files (one-time scripts)
+upload_embeddings_to_hub.py
+make_dataset_public.py
+test_scores.py
+test_*.py
+scripts/
+
 .history/
